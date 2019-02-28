@@ -23,13 +23,22 @@
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction
-
+from PyQt5.QtWidgets import QAction, QMessageBox
+from qgis.core import QgsProject
+from qgis.core import QgsVectorDataProvider, QgsFeature
+from qgis.core import (QgsProcessing,
+                       QgsFeatureSink,
+                       QgsProcessingException,
+                       QgsProcessingAlgorithm,
+                       QgsProcessingParameterFeatureSource,
+                       QgsProcessingParameterFeatureSink)
+import processing
 # Initialize Qt resources from file resources.py
 from .resources import *
 # Import the code for the dialog
 from .MakeBuffer_dialog import MakeBufferDialog
 import os.path
+
 
 
 class MakeBuffer:
@@ -190,6 +199,16 @@ class MakeBuffer:
         if self.first_start == True:
             self.first_start = False
             self.dlg = MakeBufferDialog()
+            self.dlg.comboBox.clear()
+            # Add all layers names in list to comboBox
+            layernames = []
+            layerList = QgsProject.instance().layerTreeRoot().findLayers()
+            for layer in layerList:
+                layernames.append(layer.name())
+
+
+            self.dlg.comboBox.addItems(layernames)
+    
 
         # show the dialog
         self.dlg.show()
@@ -199,4 +218,38 @@ class MakeBuffer:
         if result:
             # Do something useful here - delete the line containing pass and
             # substitute with your code.
-            pass
+            #pass
+            
+            #lyr = qgis.utils.iface.activeLayer()
+            
+            lyrtxt = str(self.dlg.comboBox.currentText())
+            lyr = QgsProject.instance().mapLayersByName(lyrtxt)[0].dataProvider().dataSourceUri()
+            OutputFilePath = self.dlg.mQgsFileWidget.filePath()
+
+            result = processing.run("native:buffer", {
+                'INPUT': lyr,
+                'DISTANCE': float(self.dlg.lineEdit.text()),
+                'SEGMENTS': 5,
+                'END_CAP_STYLE': 0,
+                'JOIN_STYLE': 0,
+                'MITER_LIMIT': 2,
+                'DISSOLVE': False,
+                'OUTPUT': 'memory:'
+            })
+
+            QgsProject.instance().addMapLayer(result['OUTPUT'])
+            self.iface.setActiveLayer(result['OUTPUT'])
+            self.iface.zoomToActiveLayer()
+
+            #Message de fin
+            QMessageBox.information(None, "Title", "AP: " + unicode("Ca fonctionne ! "))
+
+            # provider = lyr.dataProvider()
+            # feat= QgsFeature()
+            # alls = provider.attributeIndexes()
+            # provider.select(alls)
+
+            # while provider.nextFeature(feat):
+                # buff = feat.geometry().buffer(5,2)
+                # lyr.dataProvider().changeGeometryValues({feat.id(): buff})
+            
